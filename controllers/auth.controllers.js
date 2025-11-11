@@ -4,19 +4,26 @@
 // import { auth } from '../middleware/auth.js';
 // import multer from 'multer';
 // import path from 'path';
+// import fs from 'fs';
 
+// // ✅ Ensure upload folder exists
+// const uploadPath = 'uploads/avatars';
+// if (!fs.existsSync(uploadPath)) {
+//   fs.mkdirSync(uploadPath, { recursive: true });
+// }
 
-// // ✅ Configure storage
+// // ✅ Configure multer storage
 // const storage = multer.diskStorage({
 //   destination: (req, file, cb) => {
-//     cb(null, 'uploads/avatars'); // Folder where avatars will be saved
+//     cb(null, uploadPath);
 //   },
 //   filename: (req, file, cb) => {
-//     cb(null, Date.now() + path.extname(file.originalname));
+//     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+//     cb(null, uniqueSuffix + path.extname(file.originalname));
 //   }
 // });
 
-// // ✅ File filter (only images)
+// // ✅ File filter (only images allowed)
 // const fileFilter = (req, file, cb) => {
 //   if (file.mimetype.startsWith('image/')) cb(null, true);
 //   else cb(new Error('Only image files are allowed!'), false);
@@ -25,28 +32,18 @@
 // // ✅ Multer middleware
 // export const upload = multer({ storage, fileFilter });
 
+// // ------------------ REGISTER USER ------------------
 // export const registerUser = async (req, res) => {
 //   try {
 //     const { name, email, password, phone } = req.body;
-
-
-//     // Check if user already exists
 //     const existingUser = await User.findOne({ email });
 //     if (existingUser) {
 //       return res.status(400).json({ message: 'User already exists with this email' });
 //     }
 
-//     // Create new user
-//     const user = new User({
-//       name,
-//       email,
-//       password,
-//       phone
-//     });
-
+//     const user = new User({ name, email, password, phone });
 //     await user.save();
 
-//     // Generate JWT token
 //     const token = jwt.sign(
 //       { userId: user._id },
 //       process.env.JWT_SECRET || 'your-secret-key',
@@ -67,25 +64,19 @@
 //     console.error('Registration error:', error);
 //     res.status(500).json({ message: 'Server error during registration' });
 //   }
-// }
+// };
 
+// // ------------------ LOGIN USER ------------------
 // export const loginUser = async (req, res) => {
 //   try {
 //     const { email, password } = req.body;
 
-//     // Find user by email
 //     const user = await User.findOne({ email });
-//     if (!user) {
-//       return res.status(401).json({ message: 'Invalid credentials' });
-//     }
+//     if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
-//     // Check password
 //     const isMatch = await user.comparePassword(password);
-//     if (!isMatch) {
-//       return res.status(401).json({ message: 'Invalid credentials' });
-//     }
+//     if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
 
-//     // Generate JWT token
 //     const token = jwt.sign(
 //       { userId: user._id },
 //       process.env.JWT_SECRET || 'your-secret-key',
@@ -100,28 +91,26 @@
 //         name: user.name,
 //         email: user.email,
 //         role: user.role,
-//         phone: user.phone
+//         phone: user.phone,
+//         avatar: user.avatar
 //       }
 //     });
 //   } catch (error) {
 //     console.error('Login error:', error);
 //     res.status(500).json({ message: 'Server error during login' });
 //   }
-// }
+// };
 
-// // ✅ FIX: Improved getCurrentUser function
+// // ------------------ GET CURRENT USER ------------------
 // export const getCurrentUser = async (req, res) => {
 //   try {
-//     console.log('🔍 Fetching current user for ID:', req.userId); // Debug log
-
+//     console.log('🔍 Fetching current user for ID:', req.userId);
 //     const user = await User.findById(req.userId).select('-password');
 
 //     if (!user) {
-//       console.log('❌ User not found for ID:', req.userId);
+//       console.log('❌ User not found');
 //       return res.status(404).json({ message: 'User not found' });
 //     }
-
-//     console.log('✅ User found:', { id: user._id, name: user.name, email: user.email }); // Debug log
 
 //     res.json({
 //       id: user._id,
@@ -129,43 +118,48 @@
 //       email: user.email,
 //       phone: user.phone,
 //       role: user.role,
-//       avatar: user.avatar
+//       avatar: user.avatar ? `${req.protocol}://${req.get('host')}${user.avatar}` : null
 //     });
 //   } catch (error) {
 //     console.error('❌ Get user error:', error);
-//     res.status(500).json({
-//       message: 'Server error while fetching user',
-//       error: process.env.NODE_ENV === 'development' ? error.message : undefined
-//     });
+//     res.status(500).json({ message: 'Server error while fetching user' });
 //   }
-// }
+// };
 
-// // ✅ FIX: Improved updateProfile function
-
+// // ------------------ UPDATE PROFILE ------------------
 // export const updateProfile = async (req, res) => {
 //   try {
 //     const { name, phone } = req.body;
-//     const avatar = req.file ? `/uploads/avatars/${req.file.filename}` : req.body.avatar;
+//     let avatar = null;
 
-//     console.log('Updating profile for user:', req.userId);
+//     console.log('📝 Update Profile Request by:', req.userId);
 
-//     const user = await User.findByIdAndUpdate(
+//     if (req.file) {
+//       avatar = `/uploads/avatars/${req.file.filename}`;
+//       console.log('✅ Avatar uploaded:', avatar);
+//     } else if (req.body.avatar) {
+//       avatar = req.body.avatar;
+//     }
+
+//     const updatedUser = await User.findByIdAndUpdate(
 //       req.userId,
 //       { name, phone, avatar },
 //       { new: true, runValidators: true }
 //     ).select('-password');
 
-//     if (!user) return res.status(404).json({ message: 'User not found' });
+//     if (!updatedUser) {
+//       return res.status(404).json({ message: 'User not found' });
+//     }
 
 //     res.json({
 //       message: 'Profile updated successfully',
 //       user: {
-//         id: user._id,
-//         name: user.name,
-//         email: user.email,
-//         phone: user.phone,
-//         role: user.role,
-//         avatar: user.avatar
+//         id: updatedUser._id,
+//         name: updatedUser.name,
+//         email: updatedUser.email,
+//         phone: updatedUser.phone,
+//         role: updatedUser.role,
+//         avatar: updatedUser.avatar ? `${req.protocol}://${req.get('host')}${updatedUser.avatar}` : null
 //       }
 //     });
 //   } catch (error) {
@@ -174,23 +168,17 @@
 //   }
 // };
 
-
+// // ------------------ CHANGE PASSWORD ------------------
 // export const changePassword = async (req, res) => {
 //   try {
 //     const { currentPassword, newPassword } = req.body;
 
 //     const user = await User.findById(req.userId);
-//     if (!user) {
-//       return res.status(404).json({ message: 'User not found' });
-//     }
+//     if (!user) return res.status(404).json({ message: 'User not found' });
 
-//     // Verify current password
 //     const isMatch = await user.comparePassword(currentPassword);
-//     if (!isMatch) {
-//       return res.status(400).json({ message: 'Current password is incorrect' });
-//     }
+//     if (!isMatch) return res.status(400).json({ message: 'Current password is incorrect' });
 
-//     // Update password
 //     user.password = newPassword;
 //     await user.save();
 
@@ -199,41 +187,20 @@
 //     console.error('Change password error:', error);
 //     res.status(500).json({ message: 'Server error' });
 //   }
-// }
+// };
 
-import express from 'express';
+
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { auth } from '../middleware/auth.js';
+import cloudinary from '../config/cloudinary.js';
+import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
 
-// ✅ Ensure upload folder exists
-const uploadPath = 'uploads/avatars';
-if (!fs.existsSync(uploadPath)) {
-  fs.mkdirSync(uploadPath, { recursive: true });
-}
-
-// ✅ Configure multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-// ✅ File filter (only images allowed)
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) cb(null, true);
-  else cb(new Error('Only image files are allowed!'), false);
-};
-
-// ✅ Multer middleware
-export const upload = multer({ storage, fileFilter });
+// Temporary local storage for upload (before Cloudinary)
+const upload = multer({ dest: 'temp/' });
+export { upload };
 
 // ------------------ REGISTER USER ------------------
 export const registerUser = async (req, res) => {
@@ -247,11 +214,7 @@ export const registerUser = async (req, res) => {
     const user = new User({ name, email, password, phone });
     await user.save();
 
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '7d' }
-    );
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     res.status(201).json({
       message: 'User registered successfully',
@@ -260,8 +223,8 @@ export const registerUser = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
-      }
+        role: user.role,
+      },
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -280,11 +243,7 @@ export const loginUser = async (req, res) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
 
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '7d' }
-    );
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     res.json({
       message: 'Login successful',
@@ -295,8 +254,8 @@ export const loginUser = async (req, res) => {
         email: user.email,
         role: user.role,
         phone: user.phone,
-        avatar: user.avatar
-      }
+        avatar: user.avatar,
+      },
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -307,66 +266,44 @@ export const loginUser = async (req, res) => {
 // ------------------ GET CURRENT USER ------------------
 export const getCurrentUser = async (req, res) => {
   try {
-    console.log('🔍 Fetching current user for ID:', req.userId);
     const user = await User.findById(req.userId).select('-password');
-
-    if (!user) {
-      console.log('❌ User not found');
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    res.json({
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      role: user.role,
-      avatar: user.avatar ? `${req.protocol}://${req.get('host')}${user.avatar}` : null
-    });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json(user);
   } catch (error) {
-    console.error('❌ Get user error:', error);
+    console.error('Get user error:', error);
     res.status(500).json({ message: 'Server error while fetching user' });
   }
 };
 
-// ------------------ UPDATE PROFILE ------------------
+// ------------------ UPDATE PROFILE (Cloudinary) ------------------
 export const updateProfile = async (req, res) => {
   try {
     const { name, phone } = req.body;
-    let avatar = null;
+    const file = req.file;
+    let avatarUrl = null;
 
-    console.log('📝 Update Profile Request by:', req.userId);
-
-    if (req.file) {
-      avatar = `/uploads/avatars/${req.file.filename}`;
-      console.log('✅ Avatar uploaded:', avatar);
-    } else if (req.body.avatar) {
-      avatar = req.body.avatar;
+    if (file) {
+      const uploadRes = await cloudinary.uploader.upload(file.path, {
+        folder: 'avatars',
+      });
+      avatarUrl = uploadRes.secure_url;
+      fs.unlinkSync(file.path); // remove local temp file
     }
 
     const updatedUser = await User.findByIdAndUpdate(
       req.userId,
-      { name, phone, avatar },
+      { name, phone, ...(avatarUrl && { avatar: avatarUrl }) },
       { new: true, runValidators: true }
     ).select('-password');
 
-    if (!updatedUser) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    if (!updatedUser) return res.status(404).json({ message: 'User not found' });
 
     res.json({
       message: 'Profile updated successfully',
-      user: {
-        id: updatedUser._id,
-        name: updatedUser.name,
-        email: updatedUser.email,
-        phone: updatedUser.phone,
-        role: updatedUser.role,
-        avatar: updatedUser.avatar ? `${req.protocol}://${req.get('host')}${updatedUser.avatar}` : null
-      }
+      user: updatedUser,
     });
   } catch (error) {
-    console.error('❌ Update profile error:', error);
+    console.error('Update profile error:', error);
     res.status(500).json({ message: 'Server error while updating profile' });
   }
 };

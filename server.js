@@ -59,7 +59,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
-import dotenv from 'dotenv';
+// import dotenv from 'dotenv';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.js';
@@ -67,7 +67,7 @@ import farmhouseRoutes from './routes/farmhouses.js';
 import bookingRoutes from './routes/bookings.js';
 import userRoutes from './routes/users.js';
 
-dotenv.config();
+// dotenv.config();
 
 const app = express();
 

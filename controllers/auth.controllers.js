@@ -423,7 +423,7 @@ export const updateProfile = async (req, res) => {
 
     if (file) {
       // ✅ Upload file buffer directly to Cloudinary
-      const result = await new Promise((resolve, reject) => {
+      const uploadResult = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
           { folder: 'avatars' },
           (error, result) => {
@@ -434,7 +434,7 @@ export const updateProfile = async (req, res) => {
         streamifier.createReadStream(file.buffer).pipe(stream);
       });
 
-      avatarUrl = result.secure_url;
+      avatarUrl = uploadResult.secure_url;
     }
 
     const updatedUser = await User.findByIdAndUpdate(
@@ -475,3 +475,4 @@ export const changePassword = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+

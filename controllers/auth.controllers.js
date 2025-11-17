@@ -146,6 +146,7 @@ import multer from 'multer';
 import streamifier from 'streamifier';
 import crypto from 'crypto';
 import { sendOtpEmail } from '../config/nodemailer.js';
+import { OAuth2Client } from 'google-auth-library';
 
 // ✅ Use memory storage (since Vercel doesn’t allow writing files)
 const storage = multer.memoryStorage();
@@ -331,6 +332,207 @@ export const verifyOtpAndReset = async (req, res) => {
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Create Google OAuth client
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// ------------------ GOOGLE LOGIN (USING GOOGLE IDENTITY SERVICES) ------------------
+// export const googleLogin = async (req, res) => {
+//     try {
+//         const { token } = req.body;
+
+//         if (!token) {
+//             return res.status(400).json({ message: "Google token is required to login" });
+//         }
+
+//         // Verify Google token
+//         const ticket = await client.verifyIdToken({
+//             idToken: token,
+//             audience: process.env.GOOGLE_CLIENT_ID,
+//         });
+
+//         const payload = ticket.getPayload();
+//         const { sub: googleId, name, email, picture } = payload;
+
+//         console.log('🔐 Google Login Attempt:', email);
+
+//         // Find user by googleId or email
+//         let user = await User.findOne({ 
+//             $or: [
+//                 { googleId },
+//                 { email }
+//             ]
+//         });
+
+//         // If user exists but doesn't have googleId, update it
+//         if (user) {
+//             if (!user.googleId) {
+//                 user.googleId = googleId;
+//                 user.avatar = picture;
+//                 await user.save();
+//                 console.log('✅ Updated existing user with Google ID');
+//             }
+//         } else {
+//             // Create new user
+//             user = new User({
+//                 name,
+//                 email,
+//                 googleId,
+//                 avatar: picture,
+//                 isVerified: true,
+//                 password: `google-${Date.now()}` // Dummy password
+//             });
+//             await user.save();
+//             console.log('✅ Created new Google user');
+//         }
+
+//         // Generate JWT token
+//         const jwtToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+
+//         res.json({
+//             message: 'Google login successful',
+//             token: jwtToken,
+//             user: {
+//                 id: user._id,
+//                 name: user.name,
+//                 email: user.email,
+//                 role: user.role,
+//                 avatar: user.avatar,
+//                 phone: user.phone
+//             }
+//         });
+
+//     } catch (error) {
+//         console.error('❌ Google login error:', error);
+//         res.status(500).json({ message: "Google authentication failed" });
+//     }
+// };
+
+export const googleLogin = async (req, res) => {
+  try {
+
+    console.log("📌 TOKEN RECEIVED:", req.body);
+        console.log("📌 GOOGLE CLIENT ID IN BACKEND:", process.env.GOOGLE_CLIENT_ID);
+
+
+    const { token } = req.body;
+
+    // const {token} = req.body.token || req.body.credential;
+
+
+
+    if (!token) {
+      return res.status(400).json({ message: "Google token is required to login" });
+    }
+
+    // Check if Google Client ID is configured
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      console.error('❌ GOOGLE_CLIENT_ID is missing in environment variables');
+      return res.status(500).json({ message: "Google authentication is not configured properly" });
+    }
+
+    console.log('🔐 Google Login Attempt - Token received');
+
+    // Verify Google token
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const { sub: googleId, name, email, picture } = payload;
+
+    console.log('✅ Google Token Verified for:', email);
+
+    // ✅ FIX: Better user finding logic
+    let user = await User.findOne({
+      $or: [
+        { googleId }, // First check by googleId
+        { email }     // Then check by email
+      ]
+    });
+
+    console.log('🔍 User search result:', user ? 'User found' : 'No user found');
+
+    // ✅ FIX: Handle existing user without googleId
+    if (user) {
+      console.log('📝 Existing user details:', {
+        id: user._id,
+        email: user.email,
+        hasGoogleId: !!user.googleId,
+        loginMethod: user.googleId ? 'Google' : 'Email/Password'
+      });
+
+      // If user exists but doesn't have googleId, UPDATE it
+      if (!user.googleId) {
+        console.log('🔄 Updating existing user with Google ID...');
+        user.googleId = googleId;
+        if (picture && !user.avatar) {
+          user.avatar = picture;
+        }
+        await user.save();
+        console.log('✅ Updated existing email user with Google ID');
+      } else if (user.googleId !== googleId) {
+        console.error('❌ Google ID mismatch');
+        return res.status(400).json({
+          message: "This email is already associated with another Google account"
+        });
+      }
+    } else {
+      // Create new user
+      console.log('👤 Creating new Google user...');
+      user = new User({
+        name,
+        email,
+        googleId,
+        avatar: picture || '',
+        isVerified: true,
+        password: `google-${googleId}-${Date.now()}`,
+        phone: '', // Empty for Google users
+        role: 'user'
+      });
+      await user.save();
+      console.log('✅ Created new Google user');
+    }
+
+    // Generate JWT token
+    const jwtToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+
+    console.log('✅ Google login successful for:', email);
+
+    res.json({
+      message: 'Google login successful',
+      token: jwtToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role || 'user',
+        avatar: user.avatar,
+        phone: user.phone || ''
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Google login error:', error);
+
+    // More specific error messages
+    if (error.message.includes('Token used too late')) {
+      return res.status(400).json({ message: "Google token has expired" });
+    }
+    if (error.message.includes('Invalid token')) {
+      return res.status(400).json({ message: "Invalid Google token" });
+    }
+    if (error.code === 11000) {
+      return res.status(400).json({ message: "User already exists with this email" });
+    }
+
+    res.status(500).json({
+      message: "Google authentication failed",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 

@@ -17,12 +17,15 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
+    // required: [true, 'Password is required'],
+        required:false,
+
     minlength: [6, 'Password must be at least 6 characters']
   },
   phone: {
     type: String,
-    required: [true, 'Phone number is required'],
+    // required: [true, 'Phone number is required'],
+        required: false,
     match: [/^\+?[\d\s-()]+$/, 'Please enter a valid phone number']
   },
   role: {
@@ -46,6 +49,14 @@ const userSchema = new mongoose.Schema({
   },
   otpExpires: {
     type: Date,
+  },
+   googleId: {
+    type: String,
+    sparse: true // Allows multiple null values
+  },
+  isVerified: {
+    type: Boolean,
+    default: false
   },
 },
 

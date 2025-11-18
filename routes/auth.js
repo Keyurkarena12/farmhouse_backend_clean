@@ -27,6 +27,10 @@ router.post('/forgot-password', forgotPassword);
 // Verify OTP & Reset Password
 router.post('/reset-password', verifyOtpAndReset);
 
+router.get('/google-login-test', (req, res) => {
+  res.json({ message: 'Google login route is working!' });
+});
+
 router.post('/google-login', googleLogin);
 
 

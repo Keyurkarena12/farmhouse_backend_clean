@@ -106,6 +106,7 @@ import userRoutes from '../routes/users.js';
 import dotenv from 'dotenv';
 
 
+
 dotenv.config();
 
 const app = express();
@@ -129,7 +130,8 @@ app.use(
 );
 
 // Handle preflight requests
-// app.options('*', cors());
+app.use(cors());
+
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
